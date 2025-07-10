@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UniGLTF;
+using UniGLTF.Extensions.VRMC_vrm; // For ExpressionKey
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.UIElements;
+using UniVRM10; // Required for Vrm10Instance and its runtime components
 
 namespace Baxter
 {
@@ -12,7 +14,7 @@ namespace Baxter
     {
         private const string FileExtension = "vrma";
 
-        private GameObject avatarObject = null;
+        private Vrm10Instance vrmInstance = null;
         private AnimationClip animationClip = null;
 
         [MenuItem("VRM1/VRM Animation Exporter")]
@@ -29,34 +31,29 @@ namespace Baxter
             EditorGUIUtility.labelWidth = 150;
             
             EditorGUILayout.Space();
-            WrappedLabel("再生用のアバターとモーションデータを指定することで、\nVRM Animation(.vrma)ファイルを出力します。");
+            WrappedLabel("指定したアバターとモーションデータからVRM Animation(.vrma)をエクスポートします。");
             EditorGUILayout.Space();
 
             if (Application.isPlaying)
             {
-                WrappedLabel("This feature is unavailable during playing.");
+                WrappedLabel("This feature is unavailable during play mode.");
             }
             
-            EditorGUILayout.LabelField("Avatar:");
-            {
-                avatarObject = (GameObject)EditorGUILayout.ObjectField(avatarObject, typeof(GameObject), true);
-            }
+            EditorGUILayout.LabelField("Avatar (VRM1):");
+            vrmInstance = (Vrm10Instance)EditorGUILayout.ObjectField(vrmInstance, typeof(Vrm10Instance), true);
             var avatarIsValid = ShowAvatarValidityGUI();
             
             EditorGUILayout.LabelField("Animation:");
-            {
-                animationClip = (AnimationClip)EditorGUILayout.ObjectField(animationClip, typeof(AnimationClip));
-            }
-            //NOTE: Always show animation clip validity GU
+            animationClip = (AnimationClip)EditorGUILayout.ObjectField(animationClip, typeof(AnimationClip));
             var animationIsValid = ShowAnimationClipValidityGUI();
 
             EditorGUILayout.Space();
-            WrappedLabel("出力時のFPSは30で固定です.");
+            WrappedLabel("The export FPS is fixed at 30.");
             EditorGUILayout.Space();
             
             var canExport = !Application.isPlaying && avatarIsValid && animationIsValid;
             GUI.enabled = canExport;
-            if (canExport & GUILayout.Button("Export", GUILayout.MinWidth(100)))
+            if (canExport && GUILayout.Button("Export", GUILayout.MinWidth(100)))
             {
                 TrySaveAnimationClip();
             }
@@ -74,13 +71,56 @@ namespace Baxter
                 return;
             }
 
+            // --- CORRECTED: Build the expression map automatically from the runtime component ---
+            var expressionMap = new Dictionary<string, ExpressionKey>();
+            var vrmExpression = vrmInstance.Vrm.Expression;
+            if (vrmExpression != null)
+            {
+                foreach (var expressionClip in vrmExpression.Clips)
+                {
+                    if (expressionClip.Clip == null) continue;
+
+                    var key = expressionClip.Preset != ExpressionPreset.custom
+                        ? ExpressionKey.CreateFromPreset(expressionClip.Preset)
+                        : ExpressionKey.CreateCustom(expressionClip.Clip.name);
+
+                    // Use the first blend shape binding as the key for the map
+                    if (expressionClip.Clip.MorphTargetBindings.Any())
+                    {
+                        var firstBind = expressionClip.Clip.MorphTargetBindings[0];
+                        
+                        // Find the SkinnedMeshRenderer using the relative path
+                        var smrTransform = vrmInstance.transform.Find(firstBind.RelativePath);
+                        if (smrTransform == null) continue;
+
+                        var smr = smrTransform.GetComponent<SkinnedMeshRenderer>();
+                        if (smr != null && smr.sharedMesh != null && firstBind.Index < smr.sharedMesh.blendShapeCount)
+                        {
+                            var blendShapeName = smr.sharedMesh.GetBlendShapeName(firstBind.Index);
+                            if (!expressionMap.ContainsKey(blendShapeName))
+                            {
+                                expressionMap.Add(blendShapeName, key);
+                            }
+                        }
+                    }
+                }
+            }
+            Debug.Log($"[VRM Animation] Built Expression Map with {expressionMap.Count} entries.");
+
             GameObject referenceObj = null;
             try
             {
-                referenceObj = GetAnimatorOnlyObject(avatarObject);
-                var data = AnimationClipToVrmaCore.Create(referenceObj.GetComponent<Animator>(), animationClip);
+                referenceObj = GetAnimatorOnlyObject(vrmInstance.gameObject);
+                
+                // Pass the new map to the Create function
+                var data = AnimationClipToVrmaCore.Create(
+                    referenceObj.GetComponent<Animator>(), 
+                    animationClip,
+                    expressionMap 
+                );
+                
                 File.WriteAllBytes(saveFilePath, data);
-                Debug.Log("VRM Animation file was saved to: " + Path.GetFullPath(saveFilePath));
+                Debug.Log($"[VRM Animation] File was saved to: {Path.GetFullPath(saveFilePath)}");
             }
             catch (Exception ex)
             {
@@ -97,27 +137,17 @@ namespace Baxter
         
         private bool ShowAvatarValidityGUI()
         {
-            if (avatarObject == null)
+            if (vrmInstance == null)
             {
                 WrappedLabel("*Avatar is not selected.");
                 return false;
             }
-
-            var animator = avatarObject.GetComponent<Animator>();
-            if (animator == null)
+            var animator = vrmInstance.GetComponent<Animator>();
+            if (animator == null || !animator.isHuman)
             {
-                WrappedLabel(
-                    "*Avatar does not have animator. Please specify object with Animator component.");
+                WrappedLabel("*The selected avatar must have a Humanoid rig.");
                 return false;
             }
-
-            if (!animator.isHuman)
-            {
-                WrappedLabel(
-                    "*Avatar's animator is not humanoid. Please specify avatar with Humanoid rig setup.");
-                return false;
-            }
-            
             return true;
         }
 
@@ -128,91 +158,25 @@ namespace Baxter
                 WrappedLabel("*Animation Clip is not selected.");
                 return false;
             }
-
             if (!animationClip.isHumanMotion)
             {
-                WrappedLabel("*The Clip is not Humanoid Animation.");
+                WrappedLabel("*The Clip is not a Humanoid Animation.");
                 return false;
             }
-
             return true;
         }
 
-        // HumanBodyBoneの骨格と関係しない要素を削除していく。
         private static GameObject GetAnimatorOnlyObject(GameObject src)
         {
-            var resultAnimator = HumanoidBuilder.CreateHumanoid(src.GetComponent<Animator>());
+            var animator = src.GetComponent<Animator>();
+            if (animator == null) return null;
+            var resultAnimator = HumanoidBuilder.CreateHumanoid(animator);
             return resultAnimator.gameObject;
-
-            var result = Instantiate(src);
-            //コンポーネントを消す
-            var animator = result.GetComponent<Animator>();
-            var components = result.GetComponentsInChildren<Component>();
-            foreach (var c in components)
-            {
-                if (c != animator && c is not Transform)
-                {
-                    DestroyImmediate(c);
-                }
-            }
-
-            //GameObjectを消す
-            //NOTE: マイナーではあるが、以下のようなボーン構造に対して(知らないボーン)の部分を削除しないように対策している
-            // - LeftUpperLeg / (知らないボーン) / LeftLowerLeg
-            var boneTransforms = new HashSet<Transform>() { result.transform };
-            var humanBodyBoneTransforms = new HashSet<Transform>();
-            foreach (var bone in Enum.GetValues(typeof(HumanBodyBones)).Cast<HumanBodyBones>())
-            {
-                if (bone is HumanBodyBones.Jaw or HumanBodyBones.LastBone)
-                {
-                    continue;
-                }
-
-                var boneTransform = animator.GetBoneTransform(bone);
-                if (boneTransform == null)
-                {
-                    continue;
-                }
-
-                // ここでparentを見ておくのが対策
-                for (var t = boneTransform; t != null; t = t.parent)
-                {
-                    boneTransforms.Add(t);
-                }
-
-                boneTransform.name = bone.ToString();
-                humanBodyBoneTransforms.Add(boneTransform);
-            }
-
-            var transforms = result.GetComponentsInChildren<Transform>();
-            foreach (var t in transforms)
-            {
-                //親がすでに削除済みだとt == nullになりうることに注意
-                if (t != null && !boneTransforms.Contains(t))
-                {
-                    DestroyImmediate(t.gameObject);
-                }
-            }
-
-            //rootでもHumanBodyBonesでもない中間ボーンがある場合、それにも名前を振っておく
-            result.gameObject.name = "root";
-            boneTransforms.Remove(result.transform);
-            boneTransforms.ExceptWith(humanBodyBoneTransforms);
-            var otherBoneIndex = 0;
-            foreach (var bt in boneTransforms)
-            {
-                bt.name = $"bones_{otherBoneIndex}";
-                otherBoneIndex++;
-            }
-            return result;
         }
 
         private static void WrappedLabel(string label)
         {
-            var style = new GUIStyle(GUI.skin.label)
-            {
-                wordWrap = true,
-            };
+            var style = new GUIStyle(GUI.skin.label) { wordWrap = true, };
             EditorGUILayout.LabelField(label, style);
         }
     }
