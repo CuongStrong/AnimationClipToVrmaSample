@@ -16,6 +16,7 @@ namespace Baxter
     {
         private const float Frequency = 30f;
         
+        /// <summary>
         /// Creates a VRM Animation (.vrma) file.
         /// </summary>
         /// <param name="humanoid">The Animator component of the humanoid model.</param>
@@ -33,7 +34,9 @@ namespace Baxter
 
             exporter.Export(anim =>
             {
-                // --- Expression Logic ---
+                var frameCount = Mathf.FloorToInt(clip.length * Frequency);
+
+                // --- Expression Logic (MODIFIED) ---
                 var bindings = AnimationUtility.GetCurveBindings(clip);
                 foreach (var binding in bindings)
                 {
@@ -45,10 +48,8 @@ namespace Baxter
                     var blendShapeName = binding.propertyName.Substring("blendShape.".Length);
                     ExpressionKey key;
 
-                    // **MODIFICATION**: Check if the optional map was provided.
                     if (expressionMap != null)
                     {
-                        // If map is provided, use it for lookup.
                         if (!expressionMap.TryGetValue(blendShapeName, out key))
                         {
                             // If a map is used, we only export what's in the map.
@@ -68,11 +69,22 @@ namespace Baxter
                         }
                     }
                     
-                    var curve = AnimationUtility.GetEditorCurve(clip, binding);
-                    var normalizedKeys = curve.keys.Select(k => new Keyframe(k.time, k.value / 100.0f)).ToArray();
-                    var normalizedCurve = new AnimationCurve(normalizedKeys);
+                    var originalCurve = AnimationUtility.GetEditorCurve(clip, binding);
+                    var keyframes = new List<Keyframe>(frameCount + 1);
 
-                    anim.AddExpression(key, normalizedCurve);
+                    // **MODIFICATION**: Resample the curve at the specified Frequency.
+                    for (var i = 0; i <= frameCount; i++)
+                    {
+                        var time = i / Frequency;
+                        var sampleTime = Mathf.Min(time, clip.length);
+                        var value = originalCurve.Evaluate(sampleTime);
+                        
+                        // Add a new keyframe with normalized value (0-1 range).
+                        keyframes.Add(new Keyframe(time, value / 100.0f));
+                    }
+                    
+                    var resampledCurve = new AnimationCurve(keyframes.ToArray());
+                    anim.AddExpression(key, resampledCurve);
                 }
                 
                 // --- Humanoid Logic (Unchanged) ---
@@ -100,7 +112,6 @@ namespace Baxter
                     anim.AddRotationBoneAndParent(kv.Key, kv.Value, parent);
                 }
                 
-                var frameCount = Mathf.FloorToInt(clip.length * Frequency);
                 for (var i = 0; i <= frameCount; i++)
                 {
                     var time = i / Frequency;
