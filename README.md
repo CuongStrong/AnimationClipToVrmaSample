@@ -1,120 +1,113 @@
 # AnimationClipToVrmaSample
 
-ヒューマノイドのモーションからなるAnimation Clipを VRM Animation (.vrma) に変換するプロジェクトです。
+A sample Unity project that converts Humanoid AnimationClips into VRM Animation (.vrma) files.
 
-※この方法で変換した`.vrma`ファイルには何かしらの形でモデルの骨格情報が埋め込まれます。このことに関連して、とくに`.vrma`ファイルの再配布を検討している場合、このREADMEを必ず最後まで読んで下さい。
+> This conversion embeds the model's skeleton information into the `.vrma` file. If you plan to redistribute `.vrma` files, please read the **Notice about VRMA file redistribution** section below.
 
-Sample Project to convert AnimationClip asset to VRM Animation (.vrma) in Unity.
+---
 
-*The document below is in Japanese, except `Notice about License` section. If you want to redistribute `.vrma` file, you also MUST understand what is written in `Notice about VRMA file redistribution` section in addition to the license section.
+## Installation
 
-# Install
+### 1. Clone the sample project
 
-- Projectを丸ごと使う場合:
-    - このレポジトリ自体をcloneし、プロジェクトとして開く
-- 既存のプロジェクトに変換用の処理を導入する場合: 
-    - 使用中のプロジェクトに[UniVRM 0.115.0](https://github.com/vrm-c/UniVRM/releases/tag/v0.115.0)を導入
-    - Releasesページで、unitypackageをダウンロードして導入するか、またはReleaseページの記述に従って `Packages/manifest.json` に下記のような参照を設定
+Clone this repository and open it directly in Unity.
 
-```
-    "com.baxter.animation-clip-to-vrma": "https://github.com/malaybaku/AnimationClipToVrmaSample.git?path=/Assets/AnimationClipToVrma/Package#x.x.x",
-```
+### 2. Integrate into an existing project
 
-# Usage
+1. Install [UniVRM 0.115.0](https://github.com/vrm-c/UniVRM/releases/tag/v0.115.0) in your project.
+2. Add the following to your `Packages/manifest.json` to reference this exporter package:
 
-## 必要なもの
+   ```json
+   "com.baxter.animation-clip-to-vrma": "https://github.com/malaybaku/AnimationClipToVrmaSample.git?path=/Assets/AnimationClipToVrma/Package#x.x.x"
+   ```
+3. Or import the provided `.unitypackage` from the UniVRM release page.
 
-- Humanoid向けにセットアップされたAnimationClip
-- (変換方法2でのみ必要) AnimationClipの再生に用いる人型アバター
+---
 
-以下のことにも留意してください。
+## Usage
 
-- AnimationClipは単独のファイル、またはFBXファイル等の一部として含まれるデータのいずれかの形で準備します。
-- AnimationClipの再生に用いる人型アバターがVRMの場合のみ動作確認していますが、VRM以外のモデルでも動作する想定です。
-- プロジェクトをcloneした場合、AnimationClipとアバター双方のサンプルを同梱しています。
-    - 同梱しているアバターはVRoidのモデルであるため、後述のライセンスも参照下さい。
+### Requirements
 
+* A **Humanoid**-rigged `AnimationClip` (either standalone or embedded in an FBX).
+* (For Method 2) A Humanoid avatar prefab for previewing and exporting.
 
-## 変換方法1: AnimationClipの右クリックから変換
+> Although tested with VRM avatars, this should work with any Humanoid rig.
 
-プロジェクトビュー上でAnimationClipアセットを右クリックして`VRM/Convert to VRM Animation`を実行することで、モーションを変換した`.vrma`ファイルを出力します。
+### Method 1: Right‑click Conversion
 
-![Right Click on Clip](./img/right_click_on_clip.png)
+1. In the Project window, right-click any `AnimationClip` asset.
+2. Choose **Assets > VRM > Convert to VRM Animation**.
+3. Save the generated `.vrma` file using the default VRoid sample skeleton.
 
-この方法ではVRoidのサンプルモデル骨格をリファレンスとした`.vrma`が出力されます。
-この出力で得られた`.vrma`の見た目がとくに問題ない場合、簡単な手順です。
+Use this quick method if the sample skeleton works for you.
 
+### Method 2: VRM Animation Exporter Window
 
-## 変換方法2: VRM Animation Exporterウィンドウから変換
+1. In the Unity menu, go to **VRM1/VRM Animation Exporter**.
+2. In the **VRM Animation Exporter** window:
 
-メニューバーから`VRM/VRM Animation Exporter`を選択して`VRM Animation Exporter`ウィンドウを表示します。
-表示後、次のように指定します。
+   * **Avatar**: Assign a T‑pose prefab with a Humanoid `Animator`.
+   * **Animation**: Assign the `AnimationClip` to convert.
+3. Click **Export** to generate a `.vrma` file.
 
-- `Avatar`: Tポーズになっているアバターのprefabで、`Animator`コンポーネントを含むもの
-- `Animation`: 変換したいAnimationClip
+This method lets you use your own avatar’s skeleton as the reference for conversion.
 
-その後、`Export`ボタンを選択することで `.vrma` ファイルを出力します。
+### Method 3: Batch Animations Exporter
 
-![VRM Animation Exporter Window](./img/vrm_animation_exporter_window.png)
+1. In the Unity menu, go to **VRM1/Batch Animations Exporter**.
+2. In the **Batch VRM Animation Exporter** window:
 
-この手順ではVRM Animationにおいてリファレンスとなるアバターの骨格を指定できます。
-`.vrma` の生成と適用に共通のアバターを指定してモーションの再現度を高めたい場合、この手順を使用します。
+   * **Avatar**: Assign a T‑pose prefab with a Humanoid `Animator`.
+   * **Input Clips Folder**: Select the root folder that contains the AnimationClips you want to batch convert.
+   * **Output VRMA Folder**: Select the root folder where the generated `.vrma` files will be saved.
+3. Click **Export All to VRMA** to process every clip in the input folder and output corresponding `.vrma` files in the output folder.
 
+---
 
-# 変換後のVRM Animationの動作を確認する方法
+## Verifying VRM Animation
 
-※[VRoid Hub](https://hub.vroid.com/)の撮影ブース機能など、ウェブ上で `.vrma` ファイルが再生出来る方法も併用できます。この節では、Unity Editorのみで確認する方法の例を紹介しています。
+You can preview `.vrma` files in web tools like VRoid Hub’s Studio or directly in Unity:
 
-VRM Animationの適用対象にするアバターのVRMを用意し、UniVRM 0.115.0のサンプルパッケージを導入します。
+1. Import a VRM avatar and this sample’s UniVRM package (v0.115.0) into your project.
+2. Open the scene `VRM10_Samples/SimpleVrma/SimpleVrma`.
+3. Play the scene and drag your `.vrma` file onto the sample avatar.
+4. Uncheck **BoxMan** to hide the fallback skeleton mesh.
 
-- リリース: https://github.com/vrm-c/UniVRM/releases/tag/v0.115.0
-- unitypackage: https://github.com/vrm-c/UniVRM/releases/download/v0.115.0/VRM_Samples-0.115.0_7e05.unitypackage
+---
 
-*本レポジトリでは上記パッケージに含まれる`VRM10_Samples`フォルダをgitignoreの対象としています。
+## Notice about VRMA file redistribution
 
-パッケージの導入後、`VRM10_Samples/SimpleVrma/SimpleVrma`シーンを開いて実行し、アバターと`.vrma`ファイルを読み込んで動作を確認します。
+The `.vrma` file embeds the Humanoid bone skeleton used during conversion. When redistributing `.vrma` files:
 
-この手順では`.vrma`ファイルに埋め込まれたアバター骨格に基づくモデルも表示されますが、これは`BoxMan`チェックをオフにすることで非表示になります。
+* Ensure the avatar model you used is allowed for redistribution and does not require attribution.
+* Keep a record of which avatar was used to generate each `.vrma` file.
 
-![Check VRM in Sample Scene](./img/check_vrma_in_simple_vrma_scene.png)
+> This notice is specific to `.vrma` redistribution and does not override this repository’s license.
 
+---
 
-# Notice about VRMA file redistribution
+## License
 
-`.vrma` ファイル内には、アニメーションの再生を実行したモデルのHumanoidボーンの骨格情報が埋め込まれます。
+* **Avatar models** in `Assets/Model_VRoidSampleA` follow the VRM model’s license:
 
-このことに基づき、とくにVRM Animationファイルの再配布時は次のことに留意してください。
+  * Source: [AvatarSample\_A](https://hub.vroid.com/characters/2843975675147313744/models/5644550979324015604)
+* **Scripts** in `Assets/AnimationClipToVrma/Scripts/Editor/AssetCommands` contain hard‑coded skeleton data derived from the above model. Using these directly must comply with that model’s license.
+* **All other files** are licensed under this repository’s [LICENSE](LICENSE).
 
-- `VRM Animation Exporter`ウィンドウに指定するアバターモデルについて、モデルの再配布が許可され、かつクレジット表記が不要であるようなモデルを用いることを検討して下さい。
-- `.vrma`ファイルの出力時にどのモデルを使用したかについて記録を取っておくことを検討して下さい。
+---
 
-ただし、この注記は本レポジトリ自体のライセンスではありません。
+## For Developers: Updating the Reference Skeleton
 
+If you want to regenerate the `ReferenceHumanoid.cs` for a different avatar:
 
-# Notice about License
+1. Clone this repository.
+2. In the Project window, select your Humanoid avatar prefab.
+3. Right‑click and choose **Assets > VRM > Util > Export Bone Pose Script**.
+4. A new `ReferenceHumanoid.cs` will be saved to your desktop.
+5. Copy its contents into this project’s `ReferenceHumanoid.cs` to update the default skeleton.
 
-- `Assets/Model_VRoidSampleA` フォルダ内のファイルはVRMファイル自体のライセンスに従います。
-    - VRMの取得元: [AvatarSample_A](https://hub.vroid.com/characters/2843975675147313744/models/5644550979324015604)
-- `Assets/AnimationClipToVrma/Scripts/Editor/AssetCommands` フォルダ内のコードは上記モデルの骨格情報に相当する値をハードコードしているため、この値をそのまま使う場合も上記モデルのライセンスに沿ってご使用下さい。
-    - この注意書きは`変換方法1: AnimationClipの右クリックから変換`の方法を使う場合に関するものです。
-    - `VRM Animation Exporter`ウィンドウを使って`.vrma`を生成する場合、この数値は使用されません。
-- 上記を除くリソースのライセンスは`LICENSE`ファイルに従います。
+---
 
+*Generated by AnimationClipToVrmaSample*
 
-- Model data in `Assets/Model_VRoidSampleA` has own license based on VRM data format.
-    - Model Source: [AvatarSample_A](https://hub.vroid.com/characters/2843975675147313744/models/5644550979324015604)
-- The scripts in `Assets/AnimationClipToVrma/Scripts/Editor/AssetCommands` contain the hard-coded bone poses data of the model above.
-    - This note is about when you create `.vrma` file by the way in `変換方法1: AnimationClipの右クリックから変換` section.
-    - When you use `VRM Animation Exporter` window, the convert process does not use those scripts.
-- Other resources in the repository is licensed according to `LICENSE` file.
-
-
-# For Developer: Update Model_Value.cs content based on another model
-
-`変換方法1: AnimationClipの右クリックから変換`で参照している骨格情報を他のアバターのものに書き換えるには次のようにします。
-
-- このプロジェクトをcloneします。
-- 書き換えに使いたいアバターのprefabをプロジェクトビュー上で右クリックし、`VRM/Util/Export Bone Pose Script`を実行します。
-    - この操作によって、デスクトップフォルダに`ReferenceHumanoid.cs`ファイルが保存されます。
-- 生成されたファイルの内容を全てコピーし、このプロジェクト上にある `ReferenceHumanoid.cs` にペーストして内容を差し替えます。
-
+give me README.md in english
